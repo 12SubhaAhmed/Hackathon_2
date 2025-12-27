@@ -20,6 +20,4 @@ todo-evolution/
 - 👀 View Todos  
 - ✏️ Update Todo  
 - 🗑️ Delete Todo  
-- ✔️ Mark Complete / Incomplete  
-git clone <your-repo-url>
-cd todo-evolution
+- ✔️ Mark Complete / Incomplete 
