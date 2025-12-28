@@ -1,25 +1,51 @@
 from services import TodoService
 import sys
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
+from rich.prompt import Prompt
+
 
 class TodoCLI:
     def __init__(self, service: TodoService):
         self.service = service
+        self.console = Console()
+
+    def _make_todo_table(self, todos) -> Table:
+        table = Table(title="Todos", show_header=True, header_style="bold magenta")
+        table.add_column("ID", style="dim", width=6)
+        table.add_column("Title", min_width=20)
+        table.add_column("Description", min_width=20)
+        table.add_column("Status", justify="right")
+
+        for todo in todos:
+            status_text = "✅ Completed" if todo.completed else "⏳ Pending"
+            status_style = "green" if todo.completed else "red"
+            description = todo.description if todo.description else "N/A"
+            table.add_row(
+                str(todo.id),
+                todo.title,
+                description,
+                Text(status_text, style=status_style)
+            )
+        return table
 
     def run(self):
-        print("Welcome to Todo CLI")
+        self.console.print(Panel(Text("🚀 Welcome to Todo CLI 🚀", justify="center", style="bold blue")))
         while True:
-            print("\nOptions:")
-            print("1. Add Todo")
-            print("2. View Todos")
-            print("3. Update Todo")
-            print("4. Delete Todo")
-            print("5. Mark Complete/Incomplete") # New option
-            print("6. Exit")
+            self.console.print("\n[bold]Options:[/bold]")
+            self.console.print("1. [bold green]Add[/bold green] Todo")
+            self.console.print("2. [bold cyan]View[/bold cyan] Todos")
+            self.console.print("3. [bold yellow]Update[/bold yellow] Todo")
+            self.console.print("4. [bold red]Delete[/bold red] Todo")
+            self.console.print("5. [bold magenta]Mark[/bold magenta] Complete/Incomplete")
+            self.console.print("6. [bold]Exit[/bold]")
             
             try:
-                choice = input("Select an option: ").strip()
+                choice = Prompt.ask("[bold]Select an option[/bold]", choices=["1", "2", "3", "4", "5", "6"], default="2")
             except (EOFError, KeyboardInterrupt):
-                print("\nExiting...")
+                self.console.print("\n[bold red]Exiting...[/bold red]")
                 break
 
             if choice == '1':
@@ -30,124 +56,111 @@ class TodoCLI:
                 self._handle_update_todo()
             elif choice == '4':
                 self._handle_delete_todo()
-            elif choice == '5': # New option handler
+            elif choice == '5':
                 self._handle_toggle_complete()
             elif choice == '6':
-                print("Goodbye!")
+                self.console.print("[bold blue]Goodbye![/bold blue]")
                 break
-            else:
-                print("Invalid option, please try again.")
 
     def _handle_add_todo(self):
-        print("\n--- Add New Todo ---")
+        self.console.print("\n[bold green]--- Add New Todo ---[/bold green]")
         try:
-            title = input("Enter title: ").strip()
-            description = input("Enter description (optional): ").strip()
+            title = Prompt.ask("[cyan]Enter title[/cyan]")
+            description = Prompt.ask("[cyan]Enter description (optional)[/cyan]", default=None)
             
-            if not description:
-                description = None
-
             created_todo = self.service.add_todo(title, description)
-            print(f"Todo added successfully: {created_todo}")
+            self.console.print(f"[green]Todo added successfully:[/green]")
+            self.console.print(self._make_todo_table([created_todo]))
             
         except ValueError as e:
-            print(f"Error: {e}")
+            self.console.print(f"[red]Error: {e}[/red]")
 
     def _handle_view_todos(self):
-        print("\n--- All Todos ---")
+        self.console.print("\n[bold cyan]--- All Todos ---[/bold cyan]")
         todos = self.service.get_all_todos()
         if not todos:
-            print("No todos available.")
+            self.console.print("[yellow]No todos available.[/yellow]")
             return
 
-        for todo in todos:
-            status = "✓" if todo.completed else " "
-            print(f"[{status}] ID: {todo.id}, Title: {todo.title}, Description: {todo.description if todo.description else 'N/A'}")
-            print("-" * 20)
+        sorted_todos = sorted(todos, key=lambda t: t.completed)
+        self.console.print(self._make_todo_table(sorted_todos))
 
     def _handle_update_todo(self):
-        print("\n--- Update Todo ---")
+        self.console.print("\n[bold yellow]--- Update Todo ---[/bold yellow]")
         todos = self.service.get_all_todos()
         if not todos:
-            print("No todos available to update.")
+            self.console.print("[yellow]No todos available to update.[/yellow]")
             return
 
-        print("Current Todos:")
-        for todo in todos:
-            print(f"[{todo.id}] {todo.title}")
+        self.console.print(self._make_todo_table(todos))
         
         try:
-            todo_id_str = input("Enter the ID of the todo to update: ").strip()
-            todo_id = int(todo_id_str)
+            todo_id = Prompt.ask("[cyan]Enter the ID of the todo to update[/cyan]",
+                                 choices=[str(t.id) for t in todos])
+            todo_id = int(todo_id)
         except ValueError:
-            print("Error: Invalid ID. Please enter a number.")
+            self.console.print("[red]Error: Invalid ID. Please enter a number.[/red]")
             return
 
         try:
-            # Re-fetch the todo to display current values correctly in case a prior update failed silently
             current_todo = self.service.repository.get_by_id(todo_id)
             if not current_todo:
                 raise ValueError(f"Todo with ID {todo_id} not found.")
 
-            new_title = input(f"Enter new title (current: {current_todo.title}): ").strip()
-            new_description = input(f"Enter new description (current: {current_todo.description if current_todo.description else 'N/A'} - optional): ").strip()
-
-            if not new_description:
-                new_description = None
-
+            new_title = Prompt.ask(f"[cyan]Enter new title[/cyan]", default=current_todo.title)
+            new_description = Prompt.ask(f"[cyan]Enter new description (optional)[/cyan]", default=current_todo.description)
+            
             updated_todo = self.service.update_todo(todo_id, new_title, new_description)
-            print(f"Todo with ID {todo_id} updated successfully: {updated_todo}")
+            self.console.print(f"[green]Todo with ID {todo_id} updated successfully:[/green]")
+            self.console.print(self._make_todo_table([updated_todo]))
             
         except ValueError as e:
-            print(f"Error: {e}")
+            self.console.print(f"[red]Error: {e}[/red]")
     
     def _handle_delete_todo(self):
-        print("\n--- Delete Todo ---")
+        self.console.print("\n[bold red]--- Delete Todo ---[/bold red]")
         todos = self.service.get_all_todos()
         if not todos:
-            print("No todos available to delete.")
+            self.console.print("[yellow]No todos available to delete.[/yellow]")
             return
 
-        print("Current Todos:")
-        for todo in todos:
-            print(f"[{todo.id}] {todo.title}")
+        self.console.print(self._make_todo_table(todos))
         
         try:
-            todo_id_str = input("Enter the ID of the todo to delete: ").strip()
-            todo_id = int(todo_id_str)
+            todo_id = Prompt.ask("[cyan]Enter the ID of the todo to delete[/cyan]",
+                                 choices=[str(t.id) for t in todos])
+            todo_id = int(todo_id)
         except ValueError:
-            print("Error: Invalid ID. Please enter a number.")
+            self.console.print("[red]Error: Invalid ID. Please enter a number.[/red]")
             return
 
         try:
             self.service.delete_todo(todo_id)
-            print(f"Todo with ID {todo_id} deleted successfully.")
+            self.console.print(f"[green]Todo with ID {todo_id} deleted successfully.[/green]")
         except ValueError as e:
-            print(f"Error: {e}")
+            self.console.print(f"[red]Error: {e}[/red]")
     
     def _handle_toggle_complete(self):
-        print("\n--- Toggle Todo Completion Status ---")
+        self.console.print("\n[bold magenta]--- Toggle Todo Completion Status ---[/bold magenta]")
         todos = self.service.get_all_todos()
         if not todos:
-            print("No todos available to toggle.")
+            self.console.print("[yellow]No todos available to toggle.[/yellow]")
             return
 
-        print("Current Todos:")
-        for todo in todos:
-            status = "✓" if todo.completed else " "
-            print(f"[{status}] ID: {todo.id}, Title: {todo.title}")
+        self.console.print(self._make_todo_table(todos))
 
         try:
-            todo_id_str = input("Enter the ID of the todo to toggle completion status: ").strip()
-            todo_id = int(todo_id_str)
+            todo_id = Prompt.ask("[cyan]Enter the ID of the todo to toggle completion status[/cyan]",
+                                 choices=[str(t.id) for t in todos])
+            todo_id = int(todo_id)
         except ValueError:
-            print("Error: Invalid ID. Please enter a number.")
+            self.console.print("[red]Error: Invalid ID. Please enter a number.[/red]")
             return
         
         try:
             updated_todo = self.service.toggle_complete(todo_id)
             status = "completed" if updated_todo.completed else "incomplete"
-            print(f"Todo with ID {todo_id} marked as {status}.")
+            self.console.print(f"[green]Todo with ID {todo_id} marked as {status}.[/green]")
         except ValueError as e:
-            print(f"Error: {e}")
+            self.console.print(f"[red]Error: {e}[/red]")
 
